@@ -29,11 +29,25 @@ const server = http2.createSecureServer({
   key: fs.readFileSync(path.join(__dirname, "/../key.pem")),
 });
 
-/*
- *
- * Code goes here
- *
- */
+server.on("stream", (stream, headers) => {
+  const path = headers[":path"];
+  const method = headers[":method"];
+  if (path === "/msgs" && method === "GET") {
+    console.log("connected a stream", + stream.id);
+    stream.respond({
+      ":status": 200,
+      "content-type": "text/plain; charset=uft-8"
+    });
+
+    stream.write(JSON.stringify({msg: getMsgs() }));
+    connections.push(stream);
+
+    stream.on("close", () => {
+      console.log("disconnected stream", stream.id);
+      connections = connections.filter(s => s !== stream);
+    })
+  }
+});
 
 server.on("request", async (req, res) => {
   const path = req.headers[":path"];
@@ -53,11 +67,17 @@ server.on("request", async (req, res) => {
     const data = Buffer.concat(buffers).toString();
     const { user, text } = JSON.parse(data);
 
-    /*
-     *
-     * some code goes here
-     *
-     */
+    msg.push({
+      user,
+      text,
+      time: Date.now()
+    });
+
+    res.end();
+
+    connections.forEach((stream) => {
+      stream.write(JSON.stringify({ msg: getMsgs() }));
+    });
   }
 });
 
